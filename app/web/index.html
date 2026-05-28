@@ -8,6 +8,10 @@
   </head>
   <body>
     <main class="shell">
+      <div id="personAlert" class="person-alert hidden" role="alert">
+        <span class="alert-icon">&#9888;</span>
+        <span>取物区域检测到人员停留 · 建议暂不取物</span>
+      </div>
       <header class="topbar">
         <div>
           <p class="eyebrow">场景 1</p>
@@ -73,6 +77,8 @@
           </div>
           <div class="video-frame robot-frame" id="mobileViewFrame">
             <video id="cameraPreview" class="camera-preview" autoplay muted playsinline></video>
+            <canvas id="detectionCanvas" class="detection-canvas"></canvas>
+            <div class="detector-badge hidden" id="detectorBadge">检测就绪</div>
             <div class="fallback" id="mobileViewFallback">
               <div class="scan-line"></div>
               <p id="robotActionText">机器狗在 A 点待命</p>
@@ -103,6 +109,6 @@
       </footer>
     </main>
 
-    <script src="/web/app.js"></script>
+    <script type="module" src="/web/app.js"></script>
   </body>
 </html>

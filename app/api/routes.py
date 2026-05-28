@@ -11,7 +11,7 @@ from uuid import uuid4
 from app.mission.door_check import DoorCheckMission, MissionEvent
 from app.robot.go2_sdk_adapter import Go2SDKAdapter
 from app.robot.mock_go2 import MockGo2Controller
-from app.vision.mock_detector import MockPersonDetector
+from app.vision.browser_detector import BrowserPersonDetector
 
 EVENT_CAP = 200
 
@@ -25,6 +25,8 @@ class DemoState:
     current_level: str = "info"
     current_robot_action: str = "idle"
     current_robot_action_label: str = "待命"
+    person_seen: bool = False
+    last_person_seen_at: str = ""
     events: list[dict] = field(default_factory=list)
 
 
@@ -46,6 +48,8 @@ class DemoRuntime:
             self._state.current_level = "info"
             self._state.current_robot_action = "idle"
             self._state.current_robot_action_label = "待命"
+            self._state.person_seen = False
+            self._state.last_person_seen_at = ""
             self._state.events.clear()
 
     def start(self) -> tuple[bool, str]:
@@ -56,6 +60,8 @@ class DemoRuntime:
             self._state.current_state = "starting"
             self._state.current_message = "正在启动门外二次确认任务"
             self._state.current_level = "info"
+            self._state.person_seen = False
+            self._state.last_person_seen_at = ""
             self._state.events.clear()
 
         worker = threading.Thread(target=self._run_mission, daemon=True)
@@ -67,7 +73,7 @@ class DemoRuntime:
             robot = self._build_robot()
             mission = DoorCheckMission(
                 robot=robot,
-                detector=MockPersonDetector(),
+                detector=BrowserPersonDetector(self._person_seen_snapshot),
                 report=self._report_event,
             )
             mission.run()
@@ -87,6 +93,46 @@ class DemoRuntime:
         if self._robot_mode == "go2":
             return Go2SDKAdapter(self._report_robot_action)
         return MockGo2Controller(self._report_robot_action)
+
+    def _person_seen_snapshot(self) -> bool:
+        with self._lock:
+            return self._state.person_seen
+
+    def record_vision_event(self, payload: dict) -> dict:
+        has_person = bool(payload.get("has_person"))
+        try:
+            confidence = float(payload.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        bbox = payload.get("bbox")
+
+        if not has_person:
+            return {"ok": True, "person_seen": False}
+
+        timestamp = time.strftime("%H:%M:%S")
+        record = {
+            "state": "person_detected",
+            "message": f"移动视角检测到人员停留（置信度 {confidence:.0%}）",
+            "level": "warning",
+            "time": timestamp,
+        }
+        with self._lock:
+            if not self._state.running:
+                return {"ok": True, "person_seen": self._state.person_seen, "ignored": True}
+            already_seen = self._state.person_seen
+            self._state.person_seen = True
+            self._state.last_person_seen_at = timestamp
+            if not already_seen:
+                self._state.events.append(record)
+                if len(self._state.events) > EVENT_CAP:
+                    self._state.events = self._state.events[-EVENT_CAP:]
+        return {
+            "ok": True,
+            "person_seen": True,
+            "first_trigger": not already_seen,
+            "confidence": confidence,
+            "bbox": bbox,
+        }
 
     def _report_event(self, event: MissionEvent) -> None:
         record = {

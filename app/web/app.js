@@ -1,3 +1,8 @@
+import {
+  FilesetResolver,
+  ObjectDetector,
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
 const startBtn = document.querySelector("#startBtn");
 const resetBtn = document.querySelector("#resetBtn");
 const cameraBtn = document.querySelector("#cameraBtn");
@@ -21,6 +26,16 @@ const recordResult = document.querySelector("#recordResult");
 const recordText = document.querySelector("#recordText");
 const recordDownload = document.querySelector("#recordDownload");
 const metadataDownload = document.querySelector("#metadataDownload");
+const detectionCanvas = document.querySelector("#detectionCanvas");
+const detectorBadge = document.querySelector("#detectorBadge");
+const personAlert = document.querySelector("#personAlert");
+
+const DETECTOR_MODEL_PATH = "/assets/efficientdet_lite0.tflite";
+const DETECTOR_WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const DETECTION_INTERVAL_MS = 200; // 5fps
+const PERSON_SCORE_THRESHOLD = 0.5;
+const TRIGGER_WINDOW_MS = 3000;
+const TRIGGER_HIT_COUNT = 2;
 
 let lastEventCount = -1;
 let cameraStream = null;
@@ -29,6 +44,13 @@ let recordingChunks = [];
 let missionStarted = false;
 let recordSaved = false;
 let recordSaving = false;
+
+let objectDetector = null;
+let detectorLoading = null;
+let detectionRafId = null;
+let lastDetectionTs = 0;
+let personHitTimestamps = [];
+let personTriggered = false;
 
 async function postJson(url, options = {}) {
   const response = await fetch(url, { method: "POST", ...options });
@@ -108,7 +130,9 @@ function updateRecordPanel(state) {
   recordSource.textContent = cameraStream ? "笔记本摄像头 + 任务日志" : "任务日志";
 
   if (state.current_state === "clear" || state.current_state === "suggestion" || state.current_state === "done") {
-    recordResult.textContent = "当前视野内未发现人员停留";
+    recordResult.textContent = personTriggered
+      ? "疑似有人停留"
+      : "当前视野内未发现人员停留";
   } else if (state.current_state === "person_found") {
     recordResult.textContent = "疑似有人停留";
   } else if (state.current_state === "error") {
@@ -137,6 +161,45 @@ function updateSceneCopy(current) {
   sceneCopy.textContent = copy[current] ?? copy.waiting;
 }
 
+async function ensureDetector() {
+  if (objectDetector) return objectDetector;
+  if (detectorLoading) return detectorLoading;
+
+  setDetectorBadge("加载检测模型…", false);
+  detectorLoading = (async () => {
+    const fileset = await FilesetResolver.forVisionTasks(DETECTOR_WASM_BASE);
+    const detector = await ObjectDetector.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: DETECTOR_MODEL_PATH,
+        delegate: "GPU",
+      },
+      scoreThreshold: PERSON_SCORE_THRESHOLD,
+      runningMode: "VIDEO",
+      categoryAllowlist: ["person"],
+      maxResults: 5,
+    });
+    objectDetector = detector;
+    setDetectorBadge("检测就绪", false);
+    return detector;
+  })().catch((error) => {
+    setDetectorBadge(`检测模型加载失败：${error.message || error}`, true);
+    detectorLoading = null;
+    throw error;
+  });
+
+  return detectorLoading;
+}
+
+function setDetectorBadge(text, alert) {
+  detectorBadge.textContent = text;
+  detectorBadge.classList.remove("hidden");
+  detectorBadge.classList.toggle("alert", Boolean(alert));
+}
+
+function hideDetectorBadge() {
+  detectorBadge.classList.add("hidden");
+}
+
 async function startCamera() {
   if (!navigator.mediaDevices?.getUserMedia) {
     setCameraError("当前浏览器不支持摄像头访问");
@@ -152,6 +215,13 @@ async function startCamera() {
     cameraBtn.textContent = "关闭摄像头";
     cameraHint.textContent = "笔记本摄像头已作为移动视角";
     robotActionText.textContent = "笔记本摄像头移动视角";
+    setDetectorBadge("加载检测模型…", false);
+    try {
+      await ensureDetector();
+      startDetectionLoop();
+    } catch (error) {
+      console.error("MediaPipe detector init failed", error);
+    }
   } catch (error) {
     setCameraError(`摄像头启用失败：${error.name || error.message}`);
   }
@@ -169,6 +239,7 @@ async function openCameraStream() {
 }
 
 function stopCamera() {
+  stopDetectionLoop();
   if (cameraStream) {
     for (const track of cameraStream.getTracks()) {
       track.stop();
@@ -179,11 +250,156 @@ function stopCamera() {
   mobileViewFrame.classList.remove("camera-active", "camera-error");
   cameraBtn.textContent = "启用摄像头";
   cameraHint.textContent = "可启用笔记本摄像头作为移动视角";
+  clearCanvas();
+  hideDetectorBadge();
 }
 
 function setCameraError(message) {
   mobileViewFrame.classList.add("camera-error");
   cameraHint.textContent = message;
+}
+
+function startDetectionLoop() {
+  if (detectionRafId !== null) return;
+  const tick = () => {
+    detectionRafId = requestAnimationFrame(tick);
+    runDetectionStep().catch((error) => {
+      console.error("detection step failed", error);
+    });
+  };
+  detectionRafId = requestAnimationFrame(tick);
+}
+
+function stopDetectionLoop() {
+  if (detectionRafId !== null) {
+    cancelAnimationFrame(detectionRafId);
+    detectionRafId = null;
+  }
+}
+
+async function runDetectionStep() {
+  if (!objectDetector || !cameraStream) return;
+  if (cameraPreview.readyState < 2) return;
+
+  const now = performance.now();
+  if (now - lastDetectionTs < DETECTION_INTERVAL_MS) return;
+  lastDetectionTs = now;
+
+  const result = objectDetector.detectForVideo(cameraPreview, now);
+  drawDetections(result.detections);
+
+  const hasPerson = result.detections.some((det) =>
+    det.categories.some((cat) => cat.categoryName === "person" && cat.score >= PERSON_SCORE_THRESHOLD),
+  );
+
+  if (hasPerson) {
+    const wallNow = Date.now();
+    personHitTimestamps.push(wallNow);
+    personHitTimestamps = personHitTimestamps.filter((ts) => wallNow - ts <= TRIGGER_WINDOW_MS);
+    if (!personTriggered && personHitTimestamps.length >= TRIGGER_HIT_COUNT) {
+      triggerPersonAlert(result);
+    }
+  }
+}
+
+function drawDetections(detections) {
+  const video = cameraPreview;
+  if (!video.videoWidth || !video.videoHeight) return;
+  if (detectionCanvas.width !== video.videoWidth) {
+    detectionCanvas.width = video.videoWidth;
+    detectionCanvas.height = video.videoHeight;
+  }
+  const ctx = detectionCanvas.getContext("2d");
+  ctx.clearRect(0, 0, detectionCanvas.width, detectionCanvas.height);
+  if (!detections.length) return;
+
+  const strokeColor = personTriggered ? "#ff4d4d" : "#43d9a3";
+  const fillColor = personTriggered ? "rgba(255, 77, 77, 0.18)" : "rgba(67, 217, 163, 0.18)";
+  ctx.lineWidth = Math.max(2, detectionCanvas.width / 320);
+  ctx.font = `${Math.max(14, detectionCanvas.width / 56)}px Inter, "Segoe UI", sans-serif`;
+  ctx.textBaseline = "top";
+
+  for (const det of detections) {
+    const person = det.categories.find((cat) => cat.categoryName === "person");
+    if (!person || person.score < PERSON_SCORE_THRESHOLD) continue;
+    const box = det.boundingBox;
+    ctx.strokeStyle = strokeColor;
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(box.originX, box.originY, box.width, box.height);
+    ctx.strokeRect(box.originX, box.originY, box.width, box.height);
+    const label = `person ${(person.score * 100).toFixed(0)}%`;
+    ctx.save();
+    // canvas is mirrored via CSS scaleX(-1) so text would also mirror.
+    // counter-mirror just the label.
+    ctx.translate(box.originX + box.width, box.originY);
+    ctx.scale(-1, 1);
+    ctx.fillStyle = strokeColor;
+    ctx.fillRect(0, 0, ctx.measureText(label).width + 12, 22);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(label, 6, 4);
+    ctx.restore();
+  }
+}
+
+function clearCanvas() {
+  if (detectionCanvas.width && detectionCanvas.height) {
+    const ctx = detectionCanvas.getContext("2d");
+    ctx.clearRect(0, 0, detectionCanvas.width, detectionCanvas.height);
+  }
+}
+
+function triggerPersonAlert(result) {
+  personTriggered = true;
+  const best = result.detections
+    .flatMap((det) => det.categories.filter((c) => c.categoryName === "person"))
+    .sort((a, b) => b.score - a.score)[0];
+  const confidence = best ? best.score : 0;
+  setDetectorBadge(`检测到人员（${(confidence * 100).toFixed(0)}%）`, true);
+  personAlert.classList.remove("hidden");
+  playAlertChime();
+  postJson("/api/vision/event", {
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      has_person: true,
+      confidence,
+      ts: Date.now(),
+    }),
+  }).catch((error) => {
+    console.error("upload vision event failed", error);
+  });
+}
+
+function resetPersonAlert() {
+  personTriggered = false;
+  personHitTimestamps = [];
+  personAlert.classList.add("hidden");
+  if (cameraStream) {
+    setDetectorBadge("检测就绪", false);
+  }
+  clearCanvas();
+}
+
+let audioContext = null;
+function playAlertChime() {
+  try {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const ctx = audioContext;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.18);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (error) {
+    console.warn("chime failed", error);
+  }
 }
 
 function startMissionRecord() {
@@ -278,6 +494,7 @@ async function refresh() {
 }
 
 startBtn.addEventListener("click", async () => {
+  resetPersonAlert();
   startMissionRecord();
   await postJson("/api/start");
   await refresh();
@@ -298,6 +515,7 @@ resetBtn.addEventListener("click", async () => {
   recordText.textContent = "启动任务后，系统会保存本次巡航任务日志；启用摄像头后会同时保存移动视角视频。";
   recordDownload.classList.add("hidden");
   metadataDownload.classList.add("hidden");
+  resetPersonAlert();
   showNotification();
   await refresh();
 });

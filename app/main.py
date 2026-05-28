@@ -50,7 +50,25 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         if path == "/api/recording":
             save_recording_response(self, self.runtime, RECORDINGS_DIR)
             return
+        if path == "/api/vision/event":
+            self._handle_vision_event()
+            return
         self.send_error(404, "Not found")
+
+    def _handle_vision_event(self) -> None:
+        content_length = int(self.headers.get("Content-Length", "0") or "0")
+        raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+        try:
+            import json as _json
+            payload = _json.loads(raw.decode("utf-8") or "{}")
+        except (ValueError, UnicodeDecodeError):
+            json_response(self, 400, {"ok": False, "message": "invalid JSON"})
+            return
+        if not isinstance(payload, dict):
+            json_response(self, 400, {"ok": False, "message": "expected object"})
+            return
+        result = self.runtime.record_vision_event(payload)
+        json_response(self, 200, result)
 
     def log_message(self, format: str, *args) -> None:
         print(f"[http] {self.address_string()} - {format % args}")
