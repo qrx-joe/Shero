@@ -1,0 +1,13 @@
+.venv/
+.uv-cache/
+.uv-python/
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+.server.*.log
+assets/*.mp4
+!assets/.gitkeep
+recordings/*.webm
+recordings/*.json
+!recordings/.gitkeep

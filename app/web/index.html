@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Go2 取物区域二次确认 Demo</title>
+    <link rel="stylesheet" href="/web/style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">场景 1</p>
+          <h1>取物前的移动二次确认</h1>
+        </div>
+        <div class="topbar-center">
+          <div id="notificationToast" class="notification-toast hidden">
+            <span class="toast-icon">&#128276;</span>
+            <span>收到通知：外卖已到取物区域</span>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="startBtn" class="primary" type="button">启动移动确认</button>
+          <button id="resetBtn" class="secondary" type="button">重置</button>
+        </div>
+      </header>
+
+      <section class="workspace" aria-label="Demo console">
+        <article class="feed-panel">
+          <div class="panel-title">
+            <span>任务巡航记录</span>
+            <strong id="recordBadge">待开始</strong>
+          </div>
+
+          <div class="record-summary">
+            <div class="record-row">
+              <span>固定视角</span>
+              <strong id="fixedViewBadge">不可用</strong>
+            </div>
+            <div class="record-row">
+              <span>处理策略</span>
+              <strong>移动视角确认</strong>
+            </div>
+            <div class="record-row">
+              <span>记录来源</span>
+              <strong id="recordSource">任务日志</strong>
+            </div>
+            <div class="record-row">
+              <span>开始时间</span>
+              <strong id="recordStart">未开始</strong>
+            </div>
+            <div class="record-row">
+              <span>任务结论</span>
+              <strong id="recordResult">等待确认</strong>
+            </div>
+          </div>
+
+          <div class="record-box">
+            <p id="fixedViewText">固定视角不可用：实验场地无门铃/猫眼接入。</p>
+            <p id="recordText">启动任务后，系统会保存本次巡航任务日志；启用摄像头后会同时保存移动视角视频。</p>
+            <a id="recordDownload" class="record-link hidden" href="#" download>下载本次巡航记录</a>
+            <a id="metadataDownload" class="record-link hidden" href="#" download>下载任务日志</a>
+          </div>
+        </article>
+
+        <article class="feed-panel">
+          <div class="panel-title">
+            <span>移动视角 / 笔记本摄像头</span>
+            <div class="panel-actions">
+              <button id="cameraBtn" class="tiny-button" type="button">启用摄像头</button>
+              <strong id="robotBadge">待命</strong>
+            </div>
+          </div>
+          <div class="video-frame robot-frame" id="mobileViewFrame">
+            <video id="cameraPreview" class="camera-preview" autoplay muted playsinline></video>
+            <div class="fallback" id="mobileViewFallback">
+              <div class="scan-line"></div>
+              <p id="robotActionText">机器狗在 A 点待命</p>
+              <small id="cameraHint">可启用笔记本摄像头作为移动视角</small>
+            </div>
+          </div>
+          <p class="feed-note" id="robotText">动作：待命</p>
+        </article>
+
+        <aside class="status-panel">
+          <div class="panel-title">
+            <span>任务调度</span>
+            <strong id="modeBadge">mock</strong>
+          </div>
+
+          <div class="current-state" id="currentState">
+            <p>当前状态</p>
+            <strong>等待指令</strong>
+          </div>
+
+          <ol class="timeline" id="timeline" aria-label="Mission timeline"></ol>
+        </aside>
+      </section>
+
+      <footer class="scene-copy">
+        <span>文案</span>
+        <strong id="sceneCopy">固定视角不可用时，系统调度机器狗作为移动感知节点，完成取物区域二次确认。</strong>
+      </footer>
+    </main>
+
+    <script src="/web/app.js"></script>
+  </body>
+</html>
