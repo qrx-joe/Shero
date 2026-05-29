@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>守护 Guardian — Demo Pitch</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --bg-slide: #161b22;
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --accent-soft: rgba(88, 166, 255, 0.12);
+      --border: #30363d;
+      --danger: #f85149;
+      --success: #3fb950;
+      --warning: #d29922;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .deck {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    .slide {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 4vh 6vw 90px 6vw;
+    }
+    .slide.active {
+      display: flex;
+    }
+    .slide-content {
+      max-width: 1100px;
+      width: 100%;
+    }
+
+    /* Typography */
+    h1 {
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.3em;
+    }
+    h2 {
+      font-size: clamp(1.6rem, 3vw, 2.4rem);
+      font-weight: 600;
+      margin-bottom: 0.5em;
+      color: var(--text);
+    }
+    .subtitle {
+      font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+      color: var(--text-dim);
+      font-weight: 400;
+      margin-bottom: 2em;
+      letter-spacing: 0.02em;
+    }
+    .subtitle::before {
+      content: "— ";
+      color: var(--accent);
+    }
+
+    /* Bilingual caption — short subtitle style */
+    .caption {
+      font-size: 0.8em;
+      color: var(--text-dim);
+      margin-top: 0.4em;
+      line-height: 1.4;
+      display: block;
+    }
+    .pain-item .caption,
+    .boundary-list .caption,
+    .tech-card .caption,
+    .compare-card .caption,
+    .future-list .caption {
+      font-size: 0.78em;
+      margin-top: 0.4em;
+      line-height: 1.4;
+    }
+    .flow-box .caption {
+      font-size: 0.7em;
+      margin-top: 0.2em;
+    }
+
+    /* Present mode: hide nav */
+    body.present-mode .nav-bar,
+    body.present-mode .slide-counter { display: none !important; }
+    body.present-mode .slide { padding-bottom: 4vh; }
+    p, li {
+      font-size: clamp(1rem, 1.8vw, 1.25rem);
+      line-height: 1.7;
+      color: var(--text-dim);
+    }
+    .highlight {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .danger { color: var(--danger); }
+    .success { color: var(--success); }
+
+    /* Slide background images */
+    .slide-bg {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+      opacity: 0.22;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .slide-bg.dimmer { opacity: 0.12; }
+    .slide-bg + .slide-content {
+      position: relative;
+      z-index: 1;
+    }
+    .slide-img {
+      width: 100%;
+      max-width: 700px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin: 1em auto;
+      display: block;
+    }
+
+    /* Cover */
+    .cover {
+      text-align: center;
+    }
+    .cover h1 {
+      font-size: clamp(3rem, 7vw, 5.5rem);
+      margin-bottom: 0.2em;
+    }
+    .cover .tagline {
+      font-size: clamp(1rem, 2vw, 1.3rem);
+      color: var(--text-dim);
+      margin-bottom: 2em;
+    }
+    .cover .team {
+      font-size: clamp(0.85rem, 1.5vw, 1rem);
+      color: var(--text-dim);
+      margin-top: 3em;
+    }
+    .cover .team strong {
+      color: var(--text);
+    }
+
+    /* Pain point */
+    .pain-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5em;
+      margin-top: 1em;
+    }
+    .pain-item {
+      background: rgba(22, 27, 34, 0.88);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5em;
+      position: relative;
+      overflow: hidden;
+    }
+    .pain-item::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0;
+      width: 4px; height: 100%;
+      background: var(--accent);
+    }
+    .pain-item strong {
+      color: var(--text);
+      font-size: 1.1em;
+    }
+
+    /* Boundaries */
+    .boundary-list {
+      list-style: none;
+      margin-top: 1.5em;
+    }
+    .boundary-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 1em;
+      margin-bottom: 1.2em;
+      padding: 1em 1.2em;
+      background: rgba(22, 27, 34, 0.88);
+      backdrop-filter: blur(8px);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .boundary-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px; height: 32px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 0.9em;
+      flex-shrink: 0;
+    }
+
+    /* Flowchart */
+    .flowchart {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5em;
+      margin: 1.5em 0;
+    }
+    .flow-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8em;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .flow-box {
+      background: var(--bg-slide);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.8em 1.2em;
+      text-align: center;
+      min-width: 120px;
+    }
+    .flow-box strong {
+      color: var(--text);
+      display: block;
+      font-size: 0.95em;
+    }
+    .flow-box small {
+      color: var(--text-dim);
+      font-size: 0.8em;
+    }
+    .flow-box.accent {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .flow-box.accent strong {
+      color: var(--accent);
+    }
+    .flow-arrow {
+      color: var(--text-dim);
+      font-size: 1.2em;
+    }
+    .flow-arrow.down {
+      transform: rotate(90deg);
+    }
+    .flow-specs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1em;
+      margin-top: 1.5em;
+    }
+    .spec-card {
+      background: var(--bg-slide);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1em;
+      text-align: center;
+    }
+    .spec-card .spec-value {
+      font-size: 1.4em;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .spec-card .spec-label {
+      font-size: 0.85em;
+      color: var(--text-dim);
+      margin-top: 0.3em;
+    }
+
+    /* Comparison */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1em;
+      margin-top: 1.5em;
+    }
+    .compare-card {
+      background: var(--bg-slide);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.2em;
+      text-align: center;
+    }
+    .compare-card.ours {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .compare-card h3 {
+      font-size: 1em;
+      margin-bottom: 0.8em;
+      color: var(--text);
+    }
+    .compare-card.ours h3 {
+      color: var(--accent);
+    }
+    .compare-card p {
+      font-size: 0.9em;
+      line-height: 1.6;
+    }
+    .compare-card .compare-check {
+      font-size: 1.5em;
+      margin-bottom: 0.5em;
+    }
+    .compare-card.ours .compare-check {
+      color: var(--accent);
+    }
+
+    /* Tech cards */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.2em;
+      margin-top: 1.5em;
+    }
+    .tech-card {
+      background: var(--bg-slide);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.3em;
+    }
+    .tech-card h3 {
+      font-size: 1.1em;
+      color: var(--accent);
+      margin-bottom: 0.5em;
+    }
+    .tech-card p {
+      font-size: 0.95em;
+      line-height: 1.6;
+    }
+
+    /* Video slide */
+    .video-placeholder {
+      width: 100%;
+      max-width: 800px;
+      aspect-ratio: 16/9;
+      background: var(--bg-slide);
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      margin: 1.5em auto;
+      color: var(--text-dim);
+    }
+    .video-placeholder .play-icon {
+      width: 60px; height: 60px;
+      border: 3px solid var(--text-dim);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5em;
+      margin-bottom: 0.5em;
+    }
+
+    /* Future */
+    .future-list {
+      list-style: none;
+      margin-top: 1.5em;
+    }
+    .future-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 1em;
+      margin-bottom: 1em;
+      padding: 1em 1.2em;
+      background: var(--bg-slide);
+      border-radius: 10px;
+      border-left: 4px solid var(--accent);
+    }
+    .future-list li strong {
+      color: var(--text);
+    }
+
+    /* Closing */
+    .closing-quote {
+      font-size: clamp(1.3rem, 2.5vw, 1.8rem);
+      font-weight: 600;
+      text-align: center;
+      color: var(--text);
+      margin: 1.5em 0;
+      padding: 1em;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Navigation */
+    .nav-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1em 2em;
+      background: rgba(13, 17, 23, 0.9);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border);
+      z-index: 100;
+    }
+    .nav-btn {
+      background: var(--bg-slide);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.6em 1.2em;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .nav-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .nav-progress {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .nav-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nav-dot.active {
+      background: var(--accent);
+      width: 24px;
+      border-radius: 4px;
+    }
+    .nav-page-num {
+      font-size: 0.85em;
+      color: var(--text-dim);
+      margin-left: 1em;
+    }
+
+    /* Slide counter top-right */
+    .slide-counter {
+      position: fixed;
+      top: 1.5em;
+      right: 2em;
+      font-size: 0.85em;
+      color: var(--text-dim);
+      z-index: 100;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .compare-grid { grid-template-columns: 1fr; }
+      .flow-specs { grid-template-columns: 1fr 1fr; }
+      .tech-grid { grid-template-columns: 1fr; }
+      .slide { padding: 3vh 4vw; }
+    }
+
+    /* Print */
+    @media print {
+      .slide {
+        display: flex !important;
+        opacity: 1 !important;
+        position: relative;
+        page-break-after: always;
+        height: auto;
+        min-height: 100vh;
+      }
+      .nav-bar, .slide-counter { display: none; }
+    }
+
+    /* No animations — clean cut */
+  </style>
+</head>
+<body class="present-mode">
+
+  <div class="slide-counter"><span id="counter">1 / 8</span></div>
+
+  <div class="deck" id="deck">
+
+    <!-- Slide 1: Cover -->
+    <div class="slide active" data-index="0">
+      <img src="SheroDemo_PPT_Media/image1.png" class="slide-bg" alt="">
+      <div class="slide-content cover">
+        <h1>「 守护 」</h1>
+        <p style="font-size: clamp(1rem, 2vw, 1.4rem); color: var(--accent); font-weight: 600; letter-spacing: 0.15em; margin-bottom: 0.3em; text-shadow: 0 0 20px rgba(88,166,255,0.4), 0 0 40px rgba(88,166,255,0.15);">GUARDIAN</p>
+        <p class="tagline">面向独居女性安全的四足机器人智能巡检解决方案<br>
+        <span style="color: var(--text-dim); font-size: 0.85em;">Intelligent Quadruped Robot Patrol for Women Living Alone</span></p>
+        <div class="team">
+          <strong>团队：Shero</strong><br>
+          南瓜、瑞雪、Ginger、KK
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 2: Pain Point -->
+    <div class="slide" data-index="1">
+      <img src="SheroDemo_PPT_Media/image3.png" class="slide-bg dimmer" alt="">
+      <div class="slide-content">
+        <h2>真实痛点：不是危险本身，而是<span class="highlight">不确定性</span></h2>
+        <p class="subtitle">Real Pain Point: Uncertainty, Not Just Danger</p>
+
+        <div class="pain-grid">
+          <div class="pain-item">
+            <strong>门外半径十米的灰区</strong><br>
+            外卖放门口、楼道有人徘徊、陌生敲门——风险都发生在猫眼看不到的地方
+            <p class="caption">Doorway gray zone: deliveries, strangers, stairwells.</p>
+          </div>
+          <div class="pain-item">
+            <strong>猫眼的盲区</strong><br>
+            只能看到正前方。左侧转角、电梯口、楼梯间——全是盲区
+            <p class="caption">Peephole only sees straight ahead. Left corners, elevators, stairwells.</p>
+          </div>
+          <div class="pain-item">
+            <strong>开门即暴露</strong><br>
+            <span class="highlight">你不开门，看不到盲区；你一开门，就已经暴露了自己</span>
+            <p class="caption">Open the door and you've already exposed yourself.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 3: Product Positioning -->
+    <div class="slide" data-index="2">
+      <img src="SheroDemo_PPT_Media/image4.png" class="slide-bg dimmer" alt="">
+      <div class="slide-content">
+        <h2>产品定位：门外风险的<span class="highlight">"可移动安全探针"</span></h2>
+        <p class="subtitle">A Movable Safety Probe for Doorway Risks</p>
+
+        <p style="margin-bottom: 0.3em; font-size: clamp(1.1rem, 2vw, 1.4rem); color: var(--text);">
+          <strong>核心命题</strong>：把"开门确认"的人身风险，转移给可移动、可回传、<span class="highlight">可控</span>的机器人
+        </p>
+        <p class="caption" style="margin-bottom: 1.5em; font-size: 0.85em;">Transfer the personal risk of "opening the door to check" to a movable, streamable, controllable robot.</p>
+
+        <ul class="boundary-list">
+          <li>
+            <span class="boundary-num">1</span>
+            <div><strong style="color: var(--text);">不追人、不靠近陌生人</strong><br>机器狗只负责门外观察，最终决策权始终在用户<span class="caption">No chasing strangers. User makes the final decision.</span></div>
+          </li>
+          <li>
+            <span class="boundary-num">2</span>
+            <div><strong style="color: var(--text);">不承诺绝对安全</strong><br>只报告"画面中未观察到明显人员停留"，不说"确认安全"<span class="caption">No absolute safety promise. Only "no person observed."</span></div>
+          </li>
+          <li>
+            <span class="boundary-num">3</span>
+            <div><strong style="color: var(--text);">用户掌握回收时机</strong><br>机器狗巡视完成后停在门外，用户确认当前情况后再触发返回<span class="caption">User controls return timing. Robot stops outside, user triggers return.</span></div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Slide 4: MVP Closed Loop -->
+    <div class="slide" data-index="3">
+      <div class="slide-content">
+        <h2>MVP 闭环：固定路线 → 停留回传 → 用户确认 → 安全返回</h2>
+        <p class="subtitle">Fixed Route Patrol → Hold & Stream → User Confirm → Safe Return</p>
+
+        <div class="flowchart">
+          <div class="flow-row">
+            <div class="flow-box"><strong>A 点</strong><small>门内起始</small><p class="caption">Indoor start</p></div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box"><strong>B 点</strong><small>门外盲区</small><p class="caption">Outdoor blind zone</p></div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box"><strong>C 点</strong><small>左右扫视</small><p class="caption">Left/right sweep</p></div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box accent"><strong>D 点</strong><small>停留回传</small><p class="caption">Hold & stream</p></div>
+          </div>
+          <span class="flow-arrow down">→</span>
+          <div class="flow-row">
+            <div class="flow-box" style="border-color: var(--success);"><strong style="color: var(--success);">用户确认</strong><small>触发返回</small><p class="caption">User confirms → triggers return</p></div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-box"><strong>回到 A 点</strong><small>任务完成</small><p class="caption">Return to A, mission complete</p></div>
+          </div>
+        </div>
+
+        <div class="flow-specs">
+          <div class="spec-card">
+            <div class="spec-value">1-2m</div>
+            <div class="spec-label">观察范围</div>
+            <div class="caption" style="font-size:0.7em; margin-top:0.3em;">Observation range</div>
+          </div>
+          <div class="spec-card">
+            <div class="spec-value">固定路线</div>
+            <div class="spec-label">非自主导航</div>
+            <div class="caption" style="font-size:0.7em; margin-top:0.3em;">Fixed route, not autonomous</div>
+          </div>
+          <div class="spec-card">
+            <div class="spec-value">≤0.35m/s</div>
+            <div class="spec-label">速度上限</div>
+            <div class="caption" style="font-size:0.7em; margin-top:0.3em;">Speed cap</div>
+          </div>
+          <div class="spec-card">
+            <div class="spec-value">用户触发</div>
+            <div class="spec-label">非自动返回</div>
+            <div class="caption" style="font-size:0.7em; margin-top:0.3em;">User-triggered return</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 5: Demo Video -->
+    <div class="slide" data-index="4">
+      <div class="slide-content">
+        <h2>真机视频：门外短距离探查流程</h2>
+        <p class="subtitle">Recorded Demo: Short-Distance Doorway Patrol</p>
+
+        <video controls style="width:100%; max-width:800px; border-radius:12px; border:1px solid var(--border); margin:1em auto; display:block;">
+          <source src="SheroDemo.mp4" type="video/mp4">
+          <p>浏览器不支持视频播放。请直接打开 SheroDemo.mp4 文件。</p>
+        </video>
+
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8em; text-align: center; font-size: 0.85em; color: var(--text-dim); margin-top: 1em;">
+          <div><span style="color: var(--accent);">01</span><br>出门巡视<br><span class="caption" style="font-size:0.85em;">Depart</span></div>
+          <div><span style="color: var(--accent);">02</span><br>盲区扫视<br><span class="caption" style="font-size:0.85em;">Scan blind spots</span></div>
+          <div><span style="color: var(--accent);">03</span><br>停留回传<br><span class="caption" style="font-size:0.85em;">Hold & stream</span></div>
+          <div><span style="color: var(--accent);">04</span><br>用户确认返回<br><span class="caption" style="font-size:0.85em;">User confirms, return</span></div>
+        </div>
+
+        <p style="margin-top: 1em; font-size: 0.9em; text-align:center;">
+          <span class="highlight">提示：</span> 建议播放 45-60 秒关键段，边播边讲解
+          <span class="caption">Play 45-60 seconds of key segments while narrating</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Slide 6: Technical Trade-offs -->
+    <div class="slide" data-index="5">
+      <div class="slide-content">
+        <h2>技术取舍：<span class="highlight">不追求复杂导航，先把可控闭环跑稳</span></h2>
+        <p class="subtitle">Stability Over Complexity</p>
+
+        <div class="tech-grid">
+          <div class="tech-card">
+            <h3>固定路线</h3>
+            <p>基于 DimOS + Unitree Go2，定义 A-B-C-D 固定动作序列。不是自主导航，是把"不确定的门外环境"变成"可预知的固定动作"。</p>
+            <p class="caption">Fixed route A-B-C-D via DimOS + Go2. Predictable actions, not autonomous navigation.</p>
+          </div>
+          <div class="tech-card">
+            <h3>安全锁</h3>
+            <p>默认 <code style="background: var(--bg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em;">dry-run</code>，预览但不执行；必须显式 <code style="background: var(--bg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em;">--armed</code> 才发布真实运动指令。速度上限、随时中断。</p>
+            <p class="caption">Dry-run by default; --armed required for real motion. Speed cap, interruptible.</p>
+          </div>
+          <div class="tech-card">
+            <h3>可视回传</h3>
+            <p>摄像头、点云、任务状态统一展示，让用户看到机器狗看到了什么。</p>
+            <p class="caption">Camera + point cloud + status in one view. User sees what the robot sees.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 7: Differentiation -->
+    <div class="slide" data-index="6">
+      <div class="slide-content">
+        <h2>差异化：从"被动监控"到<span class="highlight">"主动探查"</span></h2>
+        <p class="subtitle">From Passive Monitoring to Active Probing</p>
+
+        <div class="compare-grid">
+          <div class="compare-card">
+            <div style="font-size:0.75em; color:var(--text-dim); margin-bottom:0.5em; letter-spacing:0.1em;">DOORBELL</div>
+            <h3>智能门铃/猫眼</h3>
+            <p><span class="success">低成本、稳定</span><br>❌ 固定视角，无法看拐角</p>
+            <p class="caption">Low cost, stable. Fixed view.</p>
+          </div>
+          <div class="compare-card">
+            <div style="font-size:0.75em; color:var(--text-dim); margin-bottom:0.5em; letter-spacing:0.1em;">CAMERA</div>
+            <h3>家用摄像头</h3>
+            <p><span class="success">室内监测</span><br>❌ 无法出门，不适合门外灰区</p>
+            <p class="caption">Indoor only. Can't go outside.</p>
+          </div>
+          <div class="compare-card ours">
+            <div style="font-size:0.75em; color:var(--accent); margin-bottom:0.5em; letter-spacing:0.1em;">OUR ROBOT</div>
+            <h3>我们的机器狗</h3>
+            <p>✅ <strong style="color: var(--text);">可移动到盲区</strong><br>
+            ✅ 替用户完成暴露动作<br>
+            ✅ 主动探查 + 停留回传</p>
+            <p class="caption">Movable. Takes risk for user. Active probe.</p>
+          </div>
+        </div>
+
+        <p style="text-align: center; margin-top: 1.5em; font-size: 1.1em;">
+          <strong style="color: var(--text);">核心差异：</strong>
+          <span class="highlight">移动视角 · 风险替身 · 可控探查</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Slide 8: Next Steps + Closing -->
+    <div class="slide" data-index="7">
+      <div class="slide-content">
+        <h2>下一步：从单次探查到<span class="highlight">可复盘的安全记录</span></h2>
+        <p class="subtitle">From One-Time Patrol to Reviewable Safety Records</p>
+
+        <ul class="future-list">
+          <li>
+            <strong>方向一：视觉辅助提示</strong><br>
+            人形检测与光线判断，只提示"可能有人 / 画面不足"，<span class="highlight">不替用户做最终判断</span>
+            <p class="caption">Visual hints: possible person / low visibility. Never final decisions.</p>
+          </li>
+          <li>
+            <strong>方向二：可复盘记录</strong><br>
+            画面 + 时间线整合到本地网页，一次完整的门外确认记录
+            <p class="caption">Video + timeline in one dashboard. Reviewable doorway confirmation record.</p>
+          </li>
+        </ul>
+
+        <div class="closing-quote">
+          用户在最不确定、最容易害怕的那一刻，<br>
+          <span class="highlight">不必一个人先把门打开</span>
+          <p class="caption" style="text-align:center; margin-top:0.5em; font-size:0.6em; border:none;">At the moment of greatest uncertainty and fear, you don't have to open the door alone.</p>
+        </div>
+
+        <p style="text-align: center; color: var(--text-dim); font-size: 0.85em; margin-top: 1em;">
+          <strong>Shero</strong> · 南瓜、瑞雪、Ginger、KK
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Navigation -->
+  <div class="nav-bar">
+    <button class="nav-btn" id="prevBtn" onclick="prevSlide()">← 上一页</button>
+    <div class="nav-progress">
+      <div class="nav-dot active" onclick="goToSlide(0)"></div>
+      <div class="nav-dot" onclick="goToSlide(1)"></div>
+      <div class="nav-dot" onclick="goToSlide(2)"></div>
+      <div class="nav-dot" onclick="goToSlide(3)"></div>
+      <div class="nav-dot" onclick="goToSlide(4)"></div>
+      <div class="nav-dot" onclick="goToSlide(5)"></div>
+      <div class="nav-dot" onclick="goToSlide(6)"></div>
+      <div class="nav-dot" onclick="goToSlide(7)"></div>
+      <span class="nav-page-num" id="pageNum">1 / 8</span>
+    </div>
+    <button class="nav-btn" id="nextBtn" onclick="nextSlide()">下一页 →</button>
+  </div>
+
+  <script>
+    let current = 0;
+    const total = 8;
+    const slides = document.querySelectorAll('.slide');
+    const dots = document.querySelectorAll('.nav-dot');
+    const counter = document.getElementById('counter');
+    const pageNum = document.getElementById('pageNum');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    function updateSlide() {
+      slides.forEach((s, i) => {
+        s.classList.toggle('active', i === current);
+      });
+      dots.forEach((d, i) => {
+        d.classList.toggle('active', i === current);
+      });
+      counter.textContent = `${current + 1} / ${total}`;
+      pageNum.textContent = `${current + 1} / ${total}`;
+      prevBtn.disabled = current === 0;
+      nextBtn.disabled = current === total - 1;
+    }
+
+    function nextSlide() {
+      if (current < total - 1) { current++; updateSlide(); }
+    }
+
+    function prevSlide() {
+      if (current > 0) { current--; updateSlide(); }
+    }
+
+    function goToSlide(n) {
+      current = n;
+      updateSlide();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextSlide(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
+      if (e.key === 'Home') { e.preventDefault(); goToSlide(0); }
+      if (e.key === 'End') { e.preventDefault(); goToSlide(total - 1); }
+      if (e.key === 'p' || e.key === 'P') {
+        document.body.classList.toggle('present-mode');
+      }
+    });
+
+    // Touch swipe support
+    let touchStartX = 0;
+    document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+    document.addEventListener('touchend', e => {
+      const diff = touchStartX - e.changedTouches[0].clientX;
+      if (Math.abs(diff) > 50) {
+        diff > 0 ? nextSlide() : prevSlide();
+      }
+    });
+
+    // Auto-capture video poster from first frame
+    const videoEl = document.querySelector('video');
+    if (videoEl) {
+      videoEl.addEventListener('loadeddata', () => {
+        if (videoEl.readyState >= 2 && !videoEl.poster) {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoEl.videoWidth || 1280;
+          canvas.height = videoEl.videoHeight || 720;
+          canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          try {
+            videoEl.poster = canvas.toDataURL('image/jpeg', 0.8);
+          } catch (e) {}
+        }
+      });
+      // Preload video metadata to trigger loadeddata
+      videoEl.preload = 'metadata';
+    }
+
+    // Present mode hint (auto-hide after 3s)
+    const hint = document.createElement('div');
+    hint.textContent = '按 P 进入演示模式';
+    hint.style.cssText = 'position:fixed;bottom:70px;left:20px;font-size:12px;color:var(--text-dim);background:rgba(13,17,23,0.8);padding:6px 12px;border-radius:6px;border:1px solid var(--border);z-index:200;transition:opacity 1s;opacity:1;';
+    document.body.appendChild(hint);
+    setTimeout(() => { hint.style.opacity = '0'; }, 3000);
+    setTimeout(() => { if (hint.parentNode) hint.parentNode.removeChild(hint); }, 4000);
+
+    updateSlide();
+  </script>
+
+</body>
+</html>
